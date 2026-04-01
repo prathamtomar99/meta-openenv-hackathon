@@ -1,0 +1,46 @@
+name: etl-pipeline-agent
+version: "1.0.0"
+description: "LLM agent learns to build, debug and repair ETL pipelines"
+author: "Your Name"
+tags:
+  - openenv
+  - data-engineering
+  - etl
+  - rl-training
+
+tasks:
+  - id: easy
+    name: "Single-table data cleaning"
+    description: "Fix a single messy CSV — date formats, duplicates, nulls, outliers, case"
+    difficulty: 1
+    max_steps: 15
+    score_range: [0.0, 1.0]
+
+  - id: medium
+    name: "Multi-table join + business rules"
+    description: "Join 3 tables, resolve FK violations, apply business rule logic, produce fact table"
+    difficulty: 2
+    max_steps: 20
+    score_range: [0.0, 1.0]
+
+  - id: hard
+    name: "Schema drift + incremental repair"
+    description: "Repair a pipeline broken by mid-run schema change without reprocessing committed rows"
+    difficulty: 3
+    max_steps: 25
+    score_range: [0.0, 1.0]
+
+action_space: discrete_structured
+observation_space: mixed_text_tabular
+reward_type: dense_multi_objective
+
+api:
+  reset_endpoint: POST /reset
+  step_endpoint:  POST /step
+  state_endpoint: GET  /state
+  health_endpoint: GET /health
+
+runtime:
+  framework: fastapi
+  language: python
+  python_version: "3.10"
