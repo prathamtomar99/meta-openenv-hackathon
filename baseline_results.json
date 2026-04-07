@@ -5,224 +5,66 @@
     {
       "task_id": "easy",
       "seed": 42,
-      "final_score": 0.9,
+      "final_score": 0.89,
       "breakdown": {
         "null_check": 1.0,
         "type_check": 1.0,
         "range_check": 1.0,
-        "uniqueness_check": 1.0,
+        "uniqueness_check": 0.9502262443438914,
         "row_count_match": 0.0,
         "schema_match": 1.0
       },
-      "steps_used": 15,
-      "cumulative_reward": 2.51,
+      "steps_used": 3,
+      "cumulative_reward": 1.01,
       "episode_log": [
         {
           "step": 1,
-          "tool": "profile_column",
-          "reward": 0.04,
-          "done": false
+          "tool": "write_transform",
+          "reward": -0.01,
+          "done": false,
+          "error": null
         },
         {
           "step": 2,
-          "tool": "write_transform",
-          "reward": -0.01,
-          "done": false
+          "tool": "execute_transform",
+          "reward": 0.09,
+          "done": false,
+          "error": null
         },
         {
           "step": 3,
-          "tool": "execute_transform",
-          "reward": 0.09,
-          "done": false
-        },
-        {
-          "step": 4,
-          "tool": "validate",
-          "reward": 0.39,
-          "done": false
-        },
-        {
-          "step": 5,
-          "tool": "profile_column",
-          "reward": 0.04,
-          "done": false
-        },
-        {
-          "step": 6,
-          "tool": "write_transform",
-          "reward": -0.01,
-          "done": false
-        },
-        {
-          "step": 7,
-          "tool": "execute_transform",
-          "reward": 0.09,
-          "done": false
-        },
-        {
-          "step": 8,
-          "tool": "validate",
-          "reward": 0.39,
-          "done": false
-        },
-        {
-          "step": 9,
-          "tool": "profile_column",
-          "reward": 0.04,
-          "done": false
-        },
-        {
-          "step": 10,
-          "tool": "write_transform",
-          "reward": -0.01,
-          "done": false
-        },
-        {
-          "step": 11,
-          "tool": "execute_transform",
-          "reward": 0.09,
-          "done": false
-        },
-        {
-          "step": 12,
-          "tool": "validate",
-          "reward": 0.39,
-          "done": false
-        },
-        {
-          "step": 13,
-          "tool": "write_transform",
-          "reward": -0.01,
-          "done": false
-        },
-        {
-          "step": 14,
-          "tool": "execute_transform",
-          "reward": 0.09,
-          "done": false
-        },
-        {
-          "step": 15,
-          "tool": "fix_transform",
-          "reward": 0.9,
-          "done": true
+          "tool": "submit",
+          "reward": 0.93,
+          "done": true,
+          "error": "llm_api_error_attempt_3: Error code: 402 - {'error': 'You have depleted your monthly included credits. Purchase pre-paid credits to continue using Inference Providers. Alternatively, subscribe to PRO to get 20x more included usage.'}"
         }
       ]
     },
     {
       "task_id": "medium",
       "seed": 42,
-      "final_score": 0.945,
+      "final_score": 0.5838,
       "breakdown": {
         "null_check": 1.0,
-        "type_check": 1.0,
-        "range_check": 0.9428406466512702,
+        "type_check": 0.4,
+        "range_check": 1.0,
         "uniqueness_check": 1.0,
-        "referential_integrity": 1.0,
-        "business_rule_margin": 0.7713625866050808,
-        "region_standardized": 0.8498845265588915,
-        "category_normalized": 1.0,
+        "referential_integrity": 0.958963282937365,
+        "business_rule_margin": 0.0,
+        "region_standardized": 0.0,
+        "category_normalized": 0.0,
         "join_completeness": 1.0,
-        "column_derivation": 1.0
+        "column_derivation": 0.0
       },
-      "steps_used": 16,
-      "cumulative_reward": 1.475,
+      "steps_used": 1,
+      "cumulative_reward": 0.6313,
       "episode_log": [
         {
           "step": 1,
-          "tool": "write_transform",
-          "reward": -0.01,
-          "done": false
-        },
-        {
-          "step": 2,
-          "tool": "execute_transform",
-          "reward": 0.09,
-          "done": false
-        },
-        {
-          "step": 3,
-          "tool": "validate",
-          "reward": 0.39,
-          "done": false
-        },
-        {
-          "step": 4,
-          "tool": "profile_column",
-          "reward": 0.04,
-          "done": false
-        },
-        {
-          "step": 5,
-          "tool": "fix_transform",
-          "reward": 0.04,
-          "done": false
-        },
-        {
-          "step": 6,
-          "tool": "execute_transform",
-          "reward": -0.04,
-          "done": false
-        },
-        {
-          "step": 7,
-          "tool": "fix_transform",
-          "reward": 0.04,
-          "done": false
-        },
-        {
-          "step": 8,
-          "tool": "execute_transform",
-          "reward": -0.04,
-          "done": false
-        },
-        {
-          "step": 9,
-          "tool": "inspect_sample",
-          "reward": 0.01,
-          "done": false
-        },
-        {
-          "step": 10,
-          "tool": "fix_transform",
-          "reward": 0.04,
-          "done": false
-        },
-        {
-          "step": 11,
-          "tool": "execute_transform",
-          "reward": -0.04,
-          "done": false
-        },
-        {
-          "step": 12,
-          "tool": "fix_transform",
-          "reward": 0.04,
-          "done": false
-        },
-        {
-          "step": 13,
-          "tool": "execute_transform",
-          "reward": -0.04,
-          "done": false
-        },
-        {
-          "step": 14,
-          "tool": "fix_transform",
-          "reward": 0.04,
-          "done": false
-        },
-        {
-          "step": 15,
-          "tool": "execute_transform",
-          "reward": -0.04,
-          "done": false
-        },
-        {
-          "step": 16,
           "tool": "submit",
-          "reward": 0.955,
-          "done": true
+          "reward": 0.6313,
+          "done": true,
+          "error": "llm_api_error_attempt_3: Error code: 402 - {'error': 'You have depleted your monthly included credits. Purchase pre-paid credits to continue using Inference Providers. Alternatively, subscribe to PRO to get 20x more included usage.'}"
         }
       ]
     },
@@ -246,10 +88,14 @@
           "step": 1,
           "tool": "submit",
           "reward": 0.398,
-          "done": true
+          "done": true,
+          "error": "llm_api_error_attempt_3: Error code: 402 - {'error': 'You have depleted your monthly included credits. Purchase pre-paid credits to continue using Inference Providers. Alternatively, subscribe to PRO to get 20x more included usage.'}"
         }
       ]
     }
   ],
-  "runtime_seconds": 236.11
+  "runtime_seconds": 26.13,
+  "api_base_url": "https://router.huggingface.co/v1",
+  "benchmark": "etl-pipeline-agent",
+  "local_image_name": null
 }
