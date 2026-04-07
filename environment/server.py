@@ -3,15 +3,18 @@ server.py — FastAPI server exposing the ETL Pipeline Agent as an OpenEnv REST 
 Endpoints: POST /reset, POST /step, GET /state, GET /health
 """
 
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import HTMLResponse
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+import json
 from typing import Any, Dict, Optional
+
+import gradio as gr
+from fastapi import FastAPI, HTTPException, Body
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
+from pydantic import BaseModel
 import uvicorn
 
 from environment.etl_env import ETLEnvironment
-from environment.models import ETLAction, StepResult
+from environment.models import ETLAction
 
 app = FastAPI(
     title="ETL Pipeline Agent — OpenEnv",
@@ -25,150 +28,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
-@app.get("/", response_class=HTMLResponse)
-def home():
-        return """
-        <!doctype html>
-        <html lang="en">
-            <head>
-                <meta charset="utf-8" />
-                <meta name="viewport" content="width=device-width, initial-scale=1" />
-                <title>OpenEnv ETL Pipeline Agent</title>
-                <style>
-                    :root {
-                        color-scheme: dark;
-                        --bg: #0b1020;
-                        --panel: #10192f;
-                        --panel-2: #14213d;
-                        --text: #e5eefc;
-                        --muted: #93a4c3;
-                        --accent: #4ade80;
-                        --accent-2: #38bdf8;
-                        --border: rgba(255,255,255,0.08);
-                    }
-                    * { box-sizing: border-box; }
-                    body {
-                        margin: 0;
-                        min-height: 100vh;
-                        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-                        background:
-                            radial-gradient(circle at top left, rgba(56,189,248,0.18), transparent 30%),
-                            radial-gradient(circle at 80% 20%, rgba(74,222,128,0.16), transparent 28%),
-                            linear-gradient(180deg, #060913 0%, #0b1020 100%);
-                        color: var(--text);
-                        display: grid;
-                        place-items: center;
-                        padding: 32px;
-                    }
-                    .card {
-                        width: min(920px, 100%);
-                        background: rgba(16,25,47,0.82);
-                        border: 1px solid var(--border);
-                        border-radius: 24px;
-                        box-shadow: 0 24px 80px rgba(0,0,0,0.35);
-                        backdrop-filter: blur(16px);
-                        overflow: hidden;
-                    }
-                    .hero {
-                        padding: 40px;
-                        border-bottom: 1px solid var(--border);
-                        background: linear-gradient(135deg, rgba(56,189,248,0.08), rgba(74,222,128,0.04));
-                    }
-                    .eyebrow {
-                        text-transform: uppercase;
-                        letter-spacing: 0.18em;
-                        color: var(--accent-2);
-                        font-size: 0.78rem;
-                        margin-bottom: 14px;
-                    }
-                    h1 {
-                        margin: 0;
-                        font-size: clamp(2rem, 5vw, 3.6rem);
-                        line-height: 1.02;
-                    }
-                    .sub {
-                        margin-top: 16px;
-                        max-width: 70ch;
-                        color: var(--muted);
-                        font-size: 1.04rem;
-                        line-height: 1.7;
-                    }
-                    .grid {
-                        display: grid;
-                        gap: 16px;
-                        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-                        padding: 24px 40px 40px;
-                    }
-                    .tile {
-                        background: rgba(20,33,61,0.88);
-                        border: 1px solid var(--border);
-                        border-radius: 18px;
-                        padding: 18px;
-                    }
-                    .tile h2 {
-                        margin: 0 0 8px;
-                        font-size: 1rem;
-                    }
-                    .tile p, .tile a {
-                        color: var(--muted);
-                        margin: 0;
-                        line-height: 1.6;
-                        font-size: 0.95rem;
-                    }
-                    .links a {
-                        color: var(--accent);
-                        text-decoration: none;
-                    }
-                    .links a:hover { text-decoration: underline; }
-                    .pill {
-                        display: inline-block;
-                        margin-top: 10px;
-                        padding: 6px 12px;
-                        border-radius: 999px;
-                        background: rgba(74,222,128,0.12);
-                        border: 1px solid rgba(74,222,128,0.25);
-                        color: #b9f6ca;
-                        font-size: 0.85rem;
-                    }
-                </style>
-            </head>
-            <body>
-                <main class="card">
-                    <section class="hero">
-                        <div class="eyebrow">OpenEnv Space</div>
-                        <h1>ETL Pipeline Agent</h1>
-                        <p class="sub">
-                            This Space exposes the OpenEnv data-engineering benchmark and REST API.
-                            Use it to reset episodes, step through tool calls, and inspect the current
-                            training environment.
-                        </p>
-                        <div class="pill">Status: running</div>
-                    </section>
-                    <section class="grid">
-                        <div class="tile">
-                            <h2>API Endpoints</h2>
-                            <p class="links">
-                                <a href="/health">/health</a><br />
-                                <a href="/docs">/docs</a><br />
-                                <a href="/redoc">/redoc</a><br />
-                                <a href="/tasks">/tasks</a>
-                            </p>
-                        </div>
-                        <div class="tile">
-                            <h2>Tasks</h2>
-                            <p>Easy: single-table cleaning. Medium: multi-table reasoning. Hard: schema drift repair.</p>
-                        </div>
-                        <div class="tile">
-                            <h2>Inference</h2>
-                            <p>Use <code>inference.py</code> as the baseline LLM agent runner against the environment.</p>
-                        </div>
-                    </section>
-                </main>
-            </body>
-        </html>
-        """
 
 # One environment instance per task_id (stateful server)
 _envs: Dict[str, ETLEnvironment] = {}
@@ -206,12 +65,13 @@ def health():
 
 
 @app.post("/reset")
-def reset(req: ResetRequest):
+def reset(req: Optional[ResetRequest] = Body(default=None)):
     """
     Start a new episode.
     Returns: observation (broken dataset + target schema), reward=0, done=False.
     """
     try:
+        req = req or ResetRequest()
         env = _get_env(req.task_id)
         result = env.reset(seed=req.seed)
         return result.model_dump()
@@ -260,5 +120,113 @@ def list_tasks():
     }
 
 
-if __name__ == "__main__":
+def _pretty(obj: Any) -> str:
+    return json.dumps(obj, indent=2, ensure_ascii=True)
+
+
+def ui_health() -> str:
+    return _pretty(health())
+
+
+def ui_tasks() -> str:
+    return _pretty(list_tasks())
+
+
+def ui_reset(task_id: str, seed: int) -> str:
+    result = reset(ResetRequest(task_id=task_id, seed=int(seed)))
+    return _pretty(result)
+
+
+def ui_step(task_id: str, tool: str, params_json: str, reasoning: str) -> str:
+    parsed_params: Dict[str, Any] = {}
+    raw = (params_json or "").strip()
+    if raw:
+        try:
+            parsed = json.loads(raw)
+            if isinstance(parsed, dict):
+                parsed_params = parsed
+            else:
+                return _pretty({"error": "params_json must decode to a JSON object"})
+        except json.JSONDecodeError as exc:
+            return _pretty({"error": f"Invalid JSON in params_json: {exc}"})
+
+    result = step(StepRequest(task_id=task_id, tool=tool, params=parsed_params, reasoning=reasoning or ""))
+    return _pretty(result)
+
+
+def ui_state(task_id: str) -> str:
+    return _pretty(state(task_id=task_id))
+
+
+with gr.Blocks(title="OpenEnv ETL Pipeline Agent", theme=gr.themes.Soft()) as demo:
+    gr.Markdown(
+        """
+        # OpenEnv ETL Pipeline Agent
+        Use this UI to call all core environment operations while keeping API endpoints available.
+        API docs: `/docs` | OpenEnv health: `/health`
+        """
+    )
+
+    with gr.Row():
+        task = gr.Dropdown(["easy", "medium", "hard"], value="easy", label="Task")
+        seed = gr.Number(value=42, precision=0, label="Seed")
+
+    with gr.Tab("Reset"):
+        reset_btn = gr.Button("POST /reset", variant="primary")
+        reset_out = gr.Code(label="Reset Response", language="json")
+        reset_btn.click(ui_reset, inputs=[task, seed], outputs=reset_out)
+
+    with gr.Tab("Step"):
+        tool = gr.Dropdown(
+            [
+                "profile_column",
+                "inspect_sample",
+                "write_transform",
+                "execute_transform",
+                "validate",
+                "fix_transform",
+                "load_to_target",
+                "submit",
+            ],
+            value="profile_column",
+            label="Tool",
+        )
+        params_json = gr.Textbox(
+            value='{"column": "amount"}',
+            lines=4,
+            label="Params JSON",
+        )
+        reasoning = gr.Textbox(value="", lines=3, label="Reasoning (optional)")
+        step_btn = gr.Button("POST /step", variant="primary")
+        step_out = gr.Code(label="Step Response", language="json")
+        step_btn.click(ui_step, inputs=[task, tool, params_json, reasoning], outputs=step_out)
+
+    with gr.Tab("State"):
+        state_btn = gr.Button("GET /state", variant="primary")
+        state_out = gr.Code(label="State Response", language="json")
+        state_btn.click(ui_state, inputs=[task], outputs=state_out)
+
+    with gr.Tab("Health & Tasks"):
+        with gr.Row():
+            health_btn = gr.Button("GET /health")
+            tasks_btn = gr.Button("GET /tasks")
+        health_out = gr.Code(label="Health Response", language="json")
+        tasks_out = gr.Code(label="Tasks Response", language="json")
+        health_btn.click(ui_health, outputs=health_out)
+        tasks_btn.click(ui_tasks, outputs=tasks_out)
+
+
+app = gr.mount_gradio_app(app, demo, path="/ui")
+
+
+@app.get("/")
+def root_redirect():
+    return RedirectResponse(url="/ui")
+
+
+def main() -> None:
     uvicorn.run("environment.server:app", host="0.0.0.0", port=8000, reload=False)
+
+
+if __name__ == "__main__":
+    main()
