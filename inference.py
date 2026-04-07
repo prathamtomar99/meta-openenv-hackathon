@@ -1,18 +1,18 @@
 """
-inference.py — Baseline inference script (MANDATORY per OpenEnv spec).
-Uses OpenAI client to run an LLM agent against all 3 tasks.
-Reads credentials from environment variables.
+inference.py — Round-1 compliant inference script.
 
 Required env vars:
-    API_BASE_URL — LLM endpoint (e.g. https://router.huggingface.co/v1)
-    MODEL_NAME   — model identifier
-    HF_TOKEN     — your HF / API key
+    API_BASE_URL
+    MODEL_NAME
+    HF_TOKEN
 
-Run:
-    python inference.py
+Optional env vars:
+    LOCAL_IMAGE_NAME (only needed for from_docker_image flows)
 
-Output: prints score for each task + summary table.
-Runtime target: < 20 min on 2vCPU / 8GB.
+Stdout contract:
+    [START] ...
+    [STEP]  ...
+    [END]   ...
 """
 
 import os
@@ -32,15 +32,22 @@ from environment.models import ETLAction
 # ─────────────────────────────────────────────
 
 API_BASE_URL = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
-API_KEY      = os.getenv("HF_TOKEN") or os.getenv("API_KEY", "hf_placeholder")
+HF_TOKEN     = os.getenv("HF_TOKEN")
 MODEL_NAME   = os.getenv("MODEL_NAME", "Qwen/Qwen2.5-72B-Instruct")
+LOCAL_IMAGE_NAME = os.getenv("LOCAL_IMAGE_NAME")
+BENCHMARK    = os.getenv("BENCHMARK", "etl-pipeline-agent")
 
 MAX_STEPS    = {"easy": 15, "medium": 20, "hard": 25}
 TEMPERATURE  = 0.2
-MAX_TOKENS   = 256
+MAX_TOKENS   = 512
+LLM_MAX_RETRIES = 3
+LLM_RETRY_BACKOFF_SECONDS = 1.5
 SEED         = 42
 
-client = OpenAI(base_url=API_BASE_URL, api_key=API_KEY)
+if not HF_TOKEN:
+    raise RuntimeError("HF_TOKEN must be set in the environment.")
+
+client = OpenAI(base_url=API_BASE_URL, api_key=HF_TOKEN)
 
 # ─────────────────────────────────────────────
 #  SYSTEM PROMPT
@@ -153,25 +160,41 @@ def parse_action(response_text: str) -> Optional[ETLAction]:
         return ETLAction(tool="submit", params={"reasoning": "Could not parse response"})
 
 
-def run_episode(task_id: str, seed: int = SEED) -> Dict:
-    """Run one full episode for a given task. Returns episode results."""
-    env = ETLEnvironment(task_id=task_id)
-    result = env.reset(seed=seed)
-    obs = result.observation
+def _sanitize_log_value(value: str) -> str:
+    """Keep logs on one line and stable for parser consumption."""
+    return str(value).replace("\n", " ").replace("\r", " ").strip()
 
-    messages = [{"role": "system", "content": SYSTEM_PROMPT}]
-    episode_log = []
-    cumulative_reward = 0.0
 
-    print(f"\n{'='*60}")
-    print(f"Task: {task_id.upper()} | Seed: {seed}")
-    print(f"{'='*60}")
+def _action_to_str(action: ETLAction) -> str:
+    params = json.dumps(action.params, separators=(",", ":"), sort_keys=True)
+    return _sanitize_log_value(f"{action.tool}({params})")
 
-    for step_num in range(1, MAX_STEPS[task_id] + 1):
-        user_msg = build_user_message(obs, step_num)
-        messages.append({"role": "user", "content": user_msg})
 
-        # LLM call
+def log_start(task: str, env_name: str, model: str) -> None:
+    print(f"[START] task={task} env={env_name} model={_sanitize_log_value(model)}", flush=True)
+
+
+def log_step(step: int, action_str: str, reward: float, done: bool, error: Optional[str]) -> None:
+    err = _sanitize_log_value(error) if error else "null"
+    done_val = str(done).lower()
+    print(
+        f"[STEP] step={step} action={action_str} reward={reward:.2f} done={done_val} error={err}",
+        flush=True,
+    )
+
+
+def log_end(success: bool, steps: int, score: float, rewards: List[float]) -> None:
+    rewards_str = ",".join(f"{r:.2f}" for r in rewards)
+    print(
+        f"[END] success={str(success).lower()} steps={steps} score={score:.2f} rewards={rewards_str}",
+        flush=True,
+    )
+
+
+def get_llm_response(messages: List[Dict[str, str]]) -> tuple[str, Optional[str]]:
+    """Call the model with bounded retries and return response text + last error."""
+    last_error: Optional[str] = None
+    for attempt in range(1, LLM_MAX_RETRIES + 1):
         try:
             response = client.chat.completions.create(
                 model=MODEL_NAME,
@@ -180,55 +203,99 @@ def run_episode(task_id: str, seed: int = SEED) -> Dict:
                 max_tokens=MAX_TOKENS,
             )
             response_text = response.choices[0].message.content or ""
-        except Exception as e:
-            print(f"  [Step {step_num}] LLM error: {e}")
-            response_text = '{"tool": "submit", "params": {"reasoning": "LLM error"}, "reasoning": ""}'
+            return response_text, None
+        except Exception as exc:
+            last_error = f"llm_api_error_attempt_{attempt}: {exc}"
+            if attempt < LLM_MAX_RETRIES:
+                time.sleep(LLM_RETRY_BACKOFF_SECONDS * attempt)
 
-        messages.append({"role": "assistant", "content": response_text})
+    fallback = '{"tool": "submit", "params": {"reasoning": "LLM error"}, "reasoning": ""}'
+    return fallback, last_error
 
-        # Parse and execute action
-        action = parse_action(response_text)
-        result = env.step(action)
+
+def run_episode(task_id: str, seed: int = SEED) -> Dict:
+    """Run one full episode for a given task. Returns episode results."""
+    env = ETLEnvironment(task_id=task_id)
+    messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+    episode_log = []
+    cumulative_reward = 0.0
+    rewards: List[float] = []
+    steps_used = 0
+    final_score = 0.0
+    breakdown: Dict[str, float] = {}
+    success = False
+
+    log_start(task=task_id, env_name=BENCHMARK, model=MODEL_NAME)
+
+    try:
+        result = env.reset(seed=seed)
         obs = result.observation
-        cumulative_reward += result.reward
 
-        step_log = {
-            "step": step_num,
-            "tool": action.tool,
-            "reward": result.reward,
-            "done": result.done,
-        }
-        episode_log.append(step_log)
+        for step_num in range(1, MAX_STEPS[task_id] + 1):
+            user_msg = build_user_message(obs, step_num)
+            messages.append({"role": "user", "content": user_msg})
 
-        print(f"  Step {step_num:02d} | tool={action.tool:<20} | reward={result.reward:+.4f} | done={result.done}")
-        if action.reasoning:
-            print(f"            reasoning: {action.reasoning}")
+            response_text, llm_error = get_llm_response(messages)
 
-        if result.done:
-            final_score = result.info.get("final_score", 0.0)
-            breakdown = result.info.get("grader_breakdown", {})
-            print(f"\n  Final score:  {final_score:.4f}")
-            print(f"  Breakdown:")
-            for k, v in breakdown.items():
-                bar = "█" * int(v * 20)
-                print(f"    {k:<30} {v:.3f}  {bar}")
-            return {
-                "task_id": task_id,
-                "seed": seed,
-                "final_score": final_score,
-                "breakdown": breakdown,
-                "steps_used": step_num,
-                "cumulative_reward": round(cumulative_reward, 4),
-                "episode_log": episode_log,
+            messages.append({"role": "assistant", "content": response_text})
+
+            action = parse_action(response_text)
+            prev_errors_count = len(obs.errors_seen)
+            result = env.step(action)
+            obs = result.observation
+
+            reward = float(result.reward)
+            done = bool(result.done)
+            cumulative_reward += reward
+            rewards.append(reward)
+            steps_used = step_num
+
+            current_error = llm_error
+            if len(obs.errors_seen) > prev_errors_count:
+                env_error = obs.errors_seen[-1]
+                current_error = f"{current_error}; {env_error}" if current_error else env_error
+
+            step_log = {
+                "step": step_num,
+                "tool": action.tool,
+                "reward": reward,
+                "done": done,
+                "error": current_error,
             }
+            episode_log.append(step_log)
 
-    # Should not reach here — budget enforced inside env
+            log_step(
+                step=step_num,
+                action_str=_action_to_str(action),
+                reward=reward,
+                done=done,
+                error=current_error,
+            )
+
+            if done:
+                final_score = float(result.info.get("final_score", 0.0))
+                breakdown = result.info.get("grader_breakdown", {})
+                success = final_score >= 0.0
+                break
+
+    finally:
+        close_fn = getattr(env, "close", None)
+        if callable(close_fn):
+            try:
+                close_fn()
+            except Exception:
+                pass
+
+        final_score = min(max(float(final_score), 0.0), 1.0)
+        success = bool(success and final_score >= 0.0)
+        log_end(success=success, steps=steps_used, score=final_score, rewards=rewards)
+
     return {
         "task_id": task_id,
         "seed": seed,
-        "final_score": 0.0,
-        "breakdown": {},
-        "steps_used": MAX_STEPS[task_id],
+        "final_score": final_score,
+        "breakdown": breakdown,
+        "steps_used": steps_used,
         "cumulative_reward": round(cumulative_reward, 4),
         "episode_log": episode_log,
     }
@@ -239,11 +306,6 @@ def run_episode(task_id: str, seed: int = SEED) -> Dict:
 # ─────────────────────────────────────────────
 
 def main():
-    print(f"ETL Pipeline Agent — Baseline Inference")
-    print(f"Model:    {MODEL_NAME}")
-    print(f"Endpoint: {API_BASE_URL}")
-    print(f"Seed:     {SEED}")
-
     tasks = ["easy", "medium", "hard"]
     results = []
 
@@ -254,16 +316,6 @@ def main():
 
     elapsed = time.time() - start
 
-    # Summary table
-    print(f"\n{'='*60}")
-    print(f"BASELINE SCORES SUMMARY")
-    print(f"{'='*60}")
-    print(f"{'Task':<12} {'Score':>8} {'Steps':>7} {'Cumulative Reward':>18}")
-    print(f"{'-'*12} {'-'*8} {'-'*7} {'-'*18}")
-    for ep in results:
-        print(f"{ep['task_id']:<12} {ep['final_score']:>8.4f} {ep['steps_used']:>7} {ep['cumulative_reward']:>18.4f}")
-    print(f"\nTotal runtime: {elapsed:.1f}s ({elapsed/60:.1f} min)")
-
     # Save results to file for reproducibility
     with open("baseline_results.json", "w") as f:
         json.dump({
@@ -271,8 +323,10 @@ def main():
             "seed": SEED,
             "results": results,
             "runtime_seconds": round(elapsed, 2),
+            "api_base_url": API_BASE_URL,
+            "benchmark": BENCHMARK,
+            "local_image_name": LOCAL_IMAGE_NAME,
         }, f, indent=2)
-    print("\nResults saved to baseline_results.json")
 
 
 if __name__ == "__main__":
