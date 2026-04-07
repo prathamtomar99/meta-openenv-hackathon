@@ -1,3 +1,14 @@
+---
+title: OpenEnv ETL Pipeline Agent
+emoji: 🤖
+colorFrom: blue
+colorTo: green
+sdk: docker
+app_port: 8000
+pinned: false
+short_description: OpenEnv ETL environment for training data engineering agents
+---
+
 # ETL Pipeline Agent — OpenEnv Environment
 
 An RL training environment where an LLM agent acts as a data engineer.
