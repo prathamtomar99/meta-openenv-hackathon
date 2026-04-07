@@ -9,7 +9,6 @@ from typing import Any, Dict, Optional
 import gradio as gr
 from fastapi import FastAPI, HTTPException, Body
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 import uvicorn
 
@@ -216,12 +215,7 @@ with gr.Blocks(title="OpenEnv ETL Pipeline Agent", theme=gr.themes.Soft()) as de
         tasks_btn.click(ui_tasks, outputs=tasks_out)
 
 
-app = gr.mount_gradio_app(app, demo, path="/ui")
-
-
-@app.get("/")
-def root_redirect():
-    return RedirectResponse(url="/ui")
+app = gr.mount_gradio_app(app, demo, path="/")
 
 
 def main() -> None:
